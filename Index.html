@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bucla și circuitul</title>
+<style>
+:root{--bg:#eef1f4;--ink:#14202b;--mute:#4f5f6e;--ok:#1f7a4d;--bad:#b3392b;--acc:#0f5c6e;--card:#e1e7ec;--line:#c3ccd5;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10181f;--ink:#e6ecf1;--mute:#9aabb8;--ok:#52c58a;--bad:#ee7c6d;--acc:#5fc0d4;--card:#1a252e;--line:#2d3b47}}
+:root[data-theme="dark"]{--bg:#10181f;--ink:#e6ecf1;--mute:#9aabb8;--ok:#52c58a;--bad:#ee7c6d;--acc:#5fc0d4;--card:#1a252e;--line:#2d3b47}
+*,*:before,*:after{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow:hidden}
+body{background:var(--bg);color:var(--ink);font:18px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif}
+.w{height:100%;max-width:560px;margin:0 auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px;position:relative}
+#cw{flex:1 1 auto;min-height:60px;display:flex;flex-direction:column}
+svg{flex:1 1 auto;min-height:0;width:100%;background:var(--card);display:block}
+.leg{display:flex;gap:12px;flex-wrap:wrap;font-size:.85rem;color:var(--mute);margin-top:3px}
+.top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.year{font-weight:800}
+#goal{font-size:.85rem;color:var(--mute);text-align:right}
+.state{padding:8px 12px;border-radius:3px;font-weight:700;font-size:1rem;background:var(--card);border-left:5px solid var(--mute);min-height:3.4em;display:flex;align-items:center}
+.state.bad{border-color:var(--bad);color:var(--bad)}
+.state.ok{border-color:var(--ok);color:var(--ok)}
+.chain{flex:none}
+.node{background:var(--card);padding:8px 12px 9px;position:relative}
+.node+.node{margin-top:8px}
+.node+.node:before{content:"↓";position:absolute;top:-8px;left:50%;transform:translateX(-50%);font-weight:800;font-size:.65rem;line-height:8px;color:var(--mute)}
+.node.up+.node:before{color:var(--ok)}
+.node.down+.node:before{color:var(--bad)}
+.row{display:flex;justify-content:space-between;font-weight:700;font-size:1.15rem}
+.tr{font-weight:800}.tr.up{color:var(--ok)}.tr.down{color:var(--bad)}
+.bar{height:8px;background:var(--line);margin-top:3px}
+.bar i{display:block;height:100%;background:var(--acc);transition:width .3s}
+.node.profit .bar i{background:#a8650f}
+.acts{display:grid;gap:8px;grid-template-columns:1fr 1fr;flex:none}
+button{font:inherit;cursor:pointer;border:2px solid var(--ink);background:transparent;color:var(--ink);padding:12px;text-align:left;border-radius:3px}
+button b{display:block;font-size:1.1rem}
+button small{color:var(--mute);display:block;line-height:1.25;font-size:.85rem}
+button.bad{border-color:var(--bad)}
+button:disabled{opacity:.45;cursor:default}
+.tools{display:flex;gap:6px;flex:none}
+button.mini{padding:6px 12px;text-align:center;font-size:.9rem;border-width:1px;flex:none}
+.log{font-size:.95rem;color:var(--mute);min-height:2.5em;flex:none}
+.end{display:none}
+.end.show{display:block;position:absolute;left:12px;right:12px;bottom:12px;background:var(--card);padding:14px;border-left:6px solid var(--mute);box-shadow:0 0 0 100vmax rgba(0,0,0,.45);z-index:5}
+.end h2{margin:0 0 8px;font-size:1.4rem}
+.end p{margin:0 0 8px}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="w">
+<div id="cw">
+<svg id="ch" viewBox="0 0 300 120" preserveAspectRatio="none" role="img" aria-label="Evoluția indicatorilor"></svg>
+<div class="leg"><span style="color:#0f5c6e">▬ Salarii</span><span style="color:#b3392b">▬ Nivel de trai</span><span style="color:#1f7a4d">▬ Natalitate</span></div>
+</div>
+<div class="top"><span class="year" id="year"></span><span id="goal">Țintă: trai și natalitate peste 50</span><button class="mini" id="rs">Reia</button></div>
+<div class="state" id="state"></div>
+<div class="chain" id="chain"></div>
+<div class="acts">
+<button class="bad" id="a1"><b>Importă muncă ieftină</b><small>Salariile scad.</small></button>
+<button id="a3"><b>Salariu unic și egal</b><small>Nimeni nu e subplătit.</small></button>
+</div>
+<div class="log" id="log"></div>
+<div id="end"></div>
+</div>
+<script>
+var S0={w:40,l:35,n:30,p:35,pr:60};
+var s,hist,year,last,over,timer;
+var N=[["w","Salarii"],["l","Nivel de trai"],["n","Natalitate"]];
+var C={w:"#0f5c6e",l:"#b3392b",n:"#1f7a4d",p:"#7a5aa8"};
+function cl(x){return Math.max(0,Math.min(100,x))}
+function reset(){clearInterval(timer);s=Object.assign({},S0);hist=[Object.assign({},s)];year=0;last=[];over=false;
+document.getElementById("end").className="";document.getElementById("end").innerHTML="";document.getElementById("log").textContent="Ești guvernul 30 de ani. Alege în fiecare an.";render(null)}
+function step(a){
+var o=Object.assign({},s);
+var imp=a==1,eq=a==3;
+var p=s.p+(s.n-50)*0.12+(imp?7:0);
+var sur=p-50;
+var w=eq?s.w+(62-s.w)*0.4:s.w-sur*0.12+(imp?-3:6);
+var l=s.l+(w-s.l)*0.35-1.5+(eq?1:0);
+var n=s.n+(l-s.n)*0.3;
+s={w:cl(w),l:cl(l),n:cl(n),p:cl(p)};
+s.pr=cl(100-s.w+(imp?5:eq?-4:-2));
+last.push(a);if(last.length>3)last.shift();
+hist.push(Object.assign({},s));year++;
+document.getElementById("log").textContent=a==1?
+"An "+year+": muncitori noi, deficit acoperit, dar salariile cedează.":a==3?
+"An "+year+": toți primesc același salariu, importul nu mai aduce avantaj, dar nimeni nu mai urcă peste tavan.":
+"An "+year+": salarii și locuințe mai bune, profit mai mic, familiile respiră.";
+render(o);if(year>=30)finish()}
+function render(o){
+var ch=document.getElementById("chain");ch.innerHTML="";
+N.forEach(function(d){var k=d[0],v=s[k],dl=o?v-o[k]:0;
+var dir=Math.abs(dl)<0.3?"":dl>0?"up":"down";
+var el=document.createElement("div");el.className="node "+(k=="pr"?"profit ":"")+dir;
+el.innerHTML='<div class="row"><span>'+d[1]+'</span><span><span class="tr '+dir+'">'+(dir=="up"?"▲ ":dir=="down"?"▼ ":"")+'</span>'+Math.round(v)+'</span></div><div class="bar"><i style="width:'+v+'%"></i></div>';
+ch.appendChild(el)});
+document.getElementById("year").textContent="Anul "+year+" / 30";
+var st=document.getElementById("state"),imps=last.filter(function(x){return x==1}).length;
+if(!last.length){st.className="state";st.textContent="Start: salarii mici, puțini copii.";}
+else if(imps>=2){st.className="state bad";st.textContent="Bucla bolnavă: muncă ieftină → salarii mici → mai puțini copii → import.";}
+else if(imps==0&&last.filter(function(x){return x==3}).length>=2){st.className="state ok";st.textContent="Bucla e blocată: nimeni nu mai poate fi subplătit.";}
+else{st.className="state";st.textContent="Amesteci import și salariu unic.";}
+var d=over||timer&&false;document.getElementById("a1").disabled=over;document.getElementById("a3").disabled=over;
+draw()}
+function draw(){
+var svg=document.getElementById("ch"),h="";
+["w","l","n"].forEach(function(k){
+var pts=hist.map(function(r,i){return (i/30*300).toFixed(1)+","+(120-r[k]*1.2).toFixed(1)}).join(" ");
+h+='<polyline fill="none" stroke="'+C[k]+'" stroke-width="2" points="'+pts+'"/>'});
+h+='<line x1="0" x2="300" y1="60" y2="60" stroke="#888" stroke-dasharray="3 4" stroke-width=".7"/>';
+svg.innerHTML=h}
+function finish(){over=true;clearInterval(timer);render(null);
+var sick=s.l<45&&s.n<45,mid=s.l>=50&&s.n>=50;
+var t,b,c;
+if(sick){t="Bucla bolnavă";c="var(--bad)";b="Ai tot acoperit deficitul, dar cauza a rămas. Nivelul de trai și natalitatea sunt joase, iar următoarea rundă de import e deja justificată."}
+else if(mid){t="Stabil, dar la tavan mediu";c="var(--acc)";b="Bucla e oprită: nimeni nu mai poate fi subplătit și populația activă se echilibrează. Dar salariul fix limitează nivelul de trai și lasă puțin loc pentru stimulente."}
+else{t="Pe jumătate drum";c="var(--mute)";b="Ai amestecat importul cu salariul unic, iar mecanismul nu s-a oprit complet. Încearcă să menții aceeași alegere mai mulți ani la rând."}
+var e=document.getElementById("end");e.style.borderColor=c;e.className="end show";
+e.innerHTML="<h2>"+t+"</h2><p>"+b+"</p><p>Trai: "+Math.round(s.l)+" · Natalitate: "+Math.round(s.n)+"</p><button class=\"mini\" id=\"again\">Joacă din nou</button>";document.getElementById("again").onclick=reset}
+function act(i){if(!over)step(i)}
+function auto(i){reset();timer=setInterval(function(){if(over){clearInterval(timer);return}step(i)},350)}
+document.getElementById("a1").onclick=function(){clearInterval(timer);act(1)};
+document.getElementById("a3").onclick=function(){clearInterval(timer);act(3)};
+document.getElementById("rs").onclick=reset;
+reset();
+</script>
+</body>
+</html>
